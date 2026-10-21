@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Medzibrodie & Okolie - Interaktívna Mapa</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            height: 100%;
+            width: 100vw;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #1a0509;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+            z-index: 1;
+            background: #1a0509;
+        }
+
+        /* Dark Burgundy Tint Overlay for Leaflet Map Tiles */
+        .leaflet-tile-pane {
+            filter: brightness(0.8) contrast(1.15) saturate(0.85) sepia(0.35) hue-rotate(300deg);
+        }
+
+        /* Custom Popup Styling */
+        .leaflet-popup-content-wrapper {
+            background: rgba(38, 6, 14, 0.96);
+            backdrop-filter: blur(12px);
+            color: #f8fafc;
+            border: 1px solid #800020;
+            border-radius: 14px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.8), 0 8px 10px -6px rgba(128, 0, 32, 0.6);
+            padding: 4px;
+        }
+
+        .leaflet-popup-tip {
+            background: rgba(38, 6, 14, 0.96);
+            border: 1px solid #800020;
+        }
+
+        .leaflet-container a.leaflet-popup-close-button {
+            color: #e2e8f0;
+            padding: 8px 8px 0 0;
+        }
+        .leaflet-container a.leaflet-popup-close-button:hover {
+            color: #fbbf24;
+        }
+
+        /* Custom Scrollbar for Drawer/Popups */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(30, 5, 10, 0.5);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #800020;
+            border-radius: 4px;
+        }
+
+        /* Pulse animation for base point */
+        @keyframes pulse-burgundy {
+            0% {
+                box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.8);
+            }
+            70% {
+                box-shadow: 0 0 0 16px rgba(225, 29, 72, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(225, 29, 72, 0);
+            }
+        }
+
+        .base-pin-pulse {
+            border-radius: 50%;
+            animation: pulse-burgundy 2s infinite;
+        }
+
+        /* Custom Marker CSS */
+        .custom-marker {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            cursor: pointer;
+        }
+
+        .custom-marker:hover {
+            transform: scale(1.22);
+            z-index: 1000 !important;
+        }
+    </style>
+</head>
+<body class="bg-stone-950 text-slate-100 flex flex-col h-screen">
+
+    <!-- Top Floating Filter Bar -->
+    <div class="fixed top-3 left-3 right-3 z-[1000] flex flex-col gap-2 max-w-lg mx-auto pointer-events-none">
+        <!-- Main Controls Container -->
+        <div class="bg-rose-950/85 backdrop-blur-md border border-rose-900/70 rounded-2xl p-2.5 shadow-2xl pointer-events-auto flex flex-col gap-2">
+            
+            <!-- Category Chips (Horizontal Scrollable) -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs font-medium">
+                <button onclick="filterCategory('all')" id="btn-all" class="cat-btn bg-rose-800 text-white px-3 py-1.5 rounded-xl whitespace-nowrap shadow transition-all hover:bg-rose-700 active:scale-95 flex items-center gap-1.5">
+                    <i class="fa-solid fa-layer-group text-amber-400"></i> Všetko
+                </button>
+                <button onclick="filterCategory('pamiatky')" id="btn-pamiatky" class="cat-btn bg-rose-950/80 text-rose-200 border border-rose-800/50 px-3 py-1.5 rounded-xl whitespace-nowrap transition-all hover:bg-rose-900 active:scale-95 flex items-center gap-1.5">
+                    <i class="fa-solid fa-landmark"></i> Pamiatky
+                </button>
+                <button onclick="filterCategory('priroda')" id="btn-priroda" class="cat-btn bg-rose-950/80 text-rose-200 border border-rose-800/50 px-3 py-1.5 rounded-xl whitespace-nowrap transition-all hover:bg-rose-900 active:scale-95 flex items-center gap-1.5">
+                    <i class="fa-solid fa-mountain-sun"></i> Príroda
+                </button>
+                <button onclick="filterCategory('gastro')" id="btn-gastro" class="cat-btn bg-rose-950/80 text-rose-200 border border-rose-800/50 px-3 py-1.5 rounded-xl whitespace-nowrap transition-all hover:bg-rose-900 active:scale-95 flex items-center gap-1.5">
+                    <i class="fa-solid fa-utensils"></i> Gastro & Relax
+                </button>
+                <button onclick="filterCategory('pl')" id="btn-pl" class="cat-btn bg-rose-950/80 text-rose-200 border border-rose-800/50 px-3 py-1.5 rounded-xl whitespace-nowrap transition-all hover:bg-rose-900 active:scale-95 flex items-center gap-1.5">
+                    <i class="fa-solid fa-flag"></i> Poľsko
+                </button>
+            </div>
+
+            <!-- Action Buttons Row -->
+            <div class="flex items-center justify-between gap-2 pt-1 border-t border-rose-900/50">
+                <button onclick="toggleRoute()" id="routeBtn" class="flex-1 bg-gradient-to-r from-rose-900 to-amber-950/90 text-rose-100 text-xs py-1.5 px-3 rounded-xl border border-rose-700/60 font-medium flex items-center justify-center gap-2 hover:brightness-110 active:scale-95 transition-all">
+                    <i class="fa-solid fa-route text-amber-400"></i>
+                    <span id="routeBtnText">Trasa z Bratislavy</span>
+                </button>
+
+                <button onclick="resetView()" class="bg-rose-900/60 hover:bg-rose-800 text-rose-200 text-xs py-1.5 px-3 rounded-xl border border-rose-700/40 font-medium flex items-center gap-1.5 active:scale-95 transition-all">
+                    <i class="fa-solid fa-crosshairs"></i> Center
+                </button>
+
+                <button onclick="toggleList()" class="bg-rose-900/60 hover:bg-rose-800 text-rose-200 text-xs py-1.5 px-3 rounded-xl border border-rose-700/40 font-medium flex items-center gap-1.5 active:scale-95 transition-all">
+                    <i class="fa-solid fa-list-ul"></i> Zoznam
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map Container -->
+    <div id="map"></div>
+
+    <!-- Bottom Sliding List Drawer -->
+    <div id="listDrawer" class="fixed inset-x-0 bottom-0 z-[1001] bg-rose-950/95 border-t border-rose-800/70 rounded-t-3xl shadow-2xl transition-transform duration-300 transform translate-y-full max-h-[70vh] flex flex-col backdrop-blur-xl">
+        <!-- Drawer Header -->
+        <div class="p-3 border-b border-rose-900/60 flex items-center justify-between cursor-pointer" onclick="toggleList()">
+            <div class="w-12 h-1 bg-rose-800/80 rounded-full mx-auto absolute top-2 left-1/2 -translate-x-1/2"></div>
+            <div class="flex items-center gap-2 mt-2">
+                <i class="fa-solid fa-map-location-dot text-amber-400"></i>
+                <h3 class="font-bold text-sm text-rose-100">Atrakcie a body v okolí</h3>
+                <span id="locationCount" class="bg-rose-900 text-rose-200 text-[10px] font-semibold px-2 py-0.5 rounded-full border border-rose-700/50">0</span>
+            </div>
+            <button class="text-rose-400 hover:text-white p-1">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Scrollable Locations List -->
+        <div id="locationsList" class="p-3 overflow-y-auto space-y-2 flex-1">
+            <!-- Dynamic Content populated via JS -->
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <script>
+        // Complete Array of Locations
+        const locations = [
+            {
+                id: 'mnp',
+                name: "Mníšek nad Popradom",
+                category: ["pamiatky", "priroda"],
+                coords: [49.413, 20.713],
+                icon: "fa-location-dot",
+                desc: "Malebná dedinka, jedna z mála lazových obcí na Slovensku, rodisko známej Klári G.",
+                link: "https://sk.wikipedia.org/wiki/Mn%C3%AD%C5%A1ek_nad_Popradom"
+            },
+			{
+                id: 'mdz',
+                name: "Medzibrodie",
+                category: ["pamiatky", "priroda"],
+                coords: [49.400119, 20.755301],
+                icon: "fa-house-chimney",
+                isBase: true,
+                desc: "Dedinka v doline rieky Poprad pri poľských hraniciach, druhý domov známeho Jaroslava Z.",
+                link: "https://sk.wikipedia.org/wiki/Mn%C3%AD%C5%A1ek_nad_Popradom"
+            },
+            {
+                id: 'vabec',
+                name: "Vyhliadka / Sedlo Vabec",
+                category: ["priroda"],
+                coords: [49.3458, 20.6865],
+                icon: "fa-eye",
+                desc: "Krásny vyhliadkový bod a sedlo (766 m n.m.) s úžasnými výhľadmi na Pieniny, Tatry a Ľubovniansku vrchovinu.",
+                link: "https://www.google.com/maps/search/Sedlo+Vabec+vyhliadka"
+            },
+            {
+                id: 'namestie-sl',
+                name: "Stará Ľubovňa - Námestie sv. Mikuláša",
+                category: ["pamiatky", "gastro"],
+                coords: [49.3013, 20.6896],
+                icon: "fa-archway",
+                desc: "Historické námestie s pamiatkovou zónou, Kostolom sv. Mikuláša, mestskými domami a kaviarničkami.",
+                link: "https://sk.wikipedia.org/wiki/Star%C3%A1_%C4%BDubov%C5%88a"
+            },
+            {
+                id: 'lubovna-hrad',
+                name: "Hrad Stará Ľubovňa & Skanzen & Bludisko",
+                category: ["pamiatky"],
+                coords: [49.315, 20.698],
+                icon: "fa-castle",
+                desc: "Dominantný hrad s korunovačnými klenotmi, skanzen ľudovej architektúry a bludisko Viktória.",
+                link: "https://sk.wikipedia.org/wiki/%C4%BDubovniansky_hrad"
+            },
+            {
+                id: 'lubovnianske-kupele',
+                name: "Ľubovnianske Kúpele",
+                category: ["gastro", "priroda"],
+                coords: [49.2552, 20.7380],
+                icon: "fa-glass-water",
+                desc: "Pokojná kúpeľná lokalita s minerálnymi prameňmi (Prameň Veronika, Jan), lesoparkom a turistickými chodníkmi.",
+                link: "https://www.google.com/maps/search/%C4%BDubovnianske+K%C3%BApele"
+            },
+            {
+                id: 'sulin',
+                name: "Sulínske pramene / Prameň Sulinka",
+                category: ["priroda", "gastro"],
+                coords: [49.3621, 20.7325],
+                icon: "fa-bottle-water",
+                desc: "Slávny prírodný minerálny prameň Sulinka pri rieke Poprad, známy už z čias Rakúsko-Uhorska.",
+                link: "https://sk.wikipedia.org/wiki/Sul%C3%ADn"
+            },
+            {
+                id: 'eliasovka',
+                name: "Eliášovka (Rozhľadňa)",
+                category: ["priroda", "pl"],
+                coords: [49.404, 20.643],
+                icon: "fa-tower-observation",
+                desc: "Najvyšší vrch Ľubovnianskej vrchoviny (1 023 m n. m.) s drevenou vyhliadkovou vežou priamo na hranici s Poľskom.",
+                link: "https://sk.wikipedia.org/wiki/Eli%C3%A1%C5%A1ovka"
+            },
+            {
+                id: 'krynica',
+                name: "Krynica-Zdrój",
+                category: ["pl", "gastro", "priroda"],
+                coords: [49.418, 20.957],
+                icon: "fa-spa",
+                desc: "Preslávené poľské kúpele, chodník korunami stromov (Słotwiny Arena), lanovky a termálne kúpaliská.",
+                link: "https://sk.wikipedia.org/wiki/Krynica-Zdr%C3%B3j"
+            },
+            {
+                id: 'muszyna',
+                name: "Muszyna (Záhrady zmyslov)",
+                category: ["pl", "gastro", "priroda"],
+                coords: [49.356, 20.898],
+                icon: "fa-leaf",
+                desc: "Nádherné kúpeľné mesto s 'Ogrody Zmysłów', čarovnými záhradami, voľnými minerálnymi prameňmi a zrúcaninou hradu.",
+                link: "https://pl.wikipedia.org/wiki/Muszyna"
+            },
+            {
+                id: 'kosare',
+                name: "Vrch Košare",
+                category: ["priroda"],
+                coords: [49.412, 20.640],
+                icon: "fa-tree",
+                desc: "Kopec nad chatou na samote v neporušenej prírode pri Medzibrodí.",
+                link: "https://www.google.com/maps/search/Ko%C5%A1are+Mn%C3%AD%C3%A1ek+nad+Popradom"
+            },
+            {
+                id: 'litmanova',
+                name: "Litmanová (Zvir)",
+                category: ["pamiatky", "priroda"],
+                coords: [49.370, 20.624],
+                icon: "fa-church",
+                desc: "Pútnické miesto na hore Zvir a malebné prostredie s lyžiarskym strediskom.",
+                link: "https://sk.wikipedia.org/wiki/Litmanov%C3%A1"
+            },
+            {
+                id: 'wierchomla',
+                name: "Drevená cerkev vo Wierchomli",
+                category: ["pl", "pamiatky"],
+                coords: [49.431, 20.803],
+                icon: "fa-place-of-worship",
+                desc: "Cerkiew Szymona Słuponika - historická lemkovská drevená cerkov vo Wierchomli Wielkej.",
+                link: "https://pl.wikipedia.org/wiki/Cerkiew_Szymona_S%C5%82upnika_w_Wierchomli_Wielkiej"
+            },
+            {
+                id: 'plavnica',
+                name: "Plavnica",
+                category: ["pamiatky"],
+                coords: [49.274, 20.781],
+                icon: "fa-location-dot",
+                desc: "Malebná šarišská obec v doline Popradu, rodisko známeho Michala V.",
+                link: "https://sk.wikipedia.org/wiki/Plavnica"
+            },
+            {
+                id: 'franko',
+                name: "Salaš u Franka",
+                category: ["gastro"],
+                coords: [49.3103939, 20.6806586],
+                icon: "fa-utensils",
+                desc: "Jeden z najvyhlásenejších a najúspešnejších tradičných salašov na Slovensku.",
+                link: "https://www.salasufranka.sk/"
+            },
+            {
+                id: 'chaluj',
+                name: "Chaluj Burger",
+                category: ["gastro"],
+                coords: [49.301, 20.688],
+                icon: "fa-hamburger",
+                desc: "Gurmánske burgre v Starej Ľubovni, o ktorých písal aj portál Refresher.",
+                link: "https://refresher.sk/search?q=chaluj"
+            },
+            {
+                id: 'nestville',
+                name: "Nestville Park (Hniezdne)",
+                category: ["gastro", "pamiatky"],
+                coords: [49.301, 20.627],
+                icon: "fa-whiskey-glass",
+                desc: "Areál s čokoládovňou, remeselným pivovarom a rodným miestom prvej slovenskej whisky.",
+                link: "https://sk.wikipedia.org/wiki/Hniezdne"
+            },
+            {
+                id: 'hranicne',
+                name: "Drevený kostolík na Hraničnom",
+                category: ["pamiatky"],
+                coords: [49.374743, 20.699138],
+                icon: "fa-church",
+                desc: "Unikátny historický drevený Kostol Všetkých Svätých s exkluzívnym výkladom od p. starostu.",
+                link: "https://sk.wikipedia.org/wiki/Hrani%C4%8Dn%C3%A9"
+            },
+            {
+                id: 'jarabina',
+                name: "Jarabinský prielom",
+                category: ["priroda"],
+                coords: [49.340, 20.658],
+                icon: "fa-water",
+                desc: "Krásna skalná tesňava vytvorená Malým Lipníkom s obrovskými obrími hrncami.",
+                link: "https://sk.wikipedia.org/wiki/Jarabinsk%C3%BD_prielom"
+            },
+            {
+                id: 'obidza',
+                name: "Obidza (PL)",
+                category: ["priroda", "pl"],
+                coords: [49.429, 20.598],
+                icon: "fa-mountain",
+                desc: "Trávnatý vrch a sedlo s poľskými łazami, horskou chatou a otvorenými panorámami.",
+                link: "https://www.google.com/maps/search/Obidza+Piwniczna"
+            },
+            {
+                id: 'ruzbachy',
+                name: "Kráter Vyšné Ružbachy",
+                category: ["priroda", "gastro"],
+                coords: [49.305, 20.559],
+                icon: "fa-volcano",
+                desc: "Najväčšie travertínové jazierko na Slovensku s teplou minerálnou vodou.",
+                link: "https://sk.wikipedia.org/wiki/Vy%C5%A1n%C3%A9_Ru%C5%BEbachy"
+            },
+            {
+                id: 'plavec',
+                name: "Hrad Plaveč",
+                category: ["pamiatky"],
+                coords: [49.255, 20.852],
+                icon: "fa-fort-awesome",
+                desc: "Zrúcanina hradu na bradle nad riekou Poprad s obnovenými hradnými múrmi.",
+                link: "https://sk.wikipedia.org/wiki/Plave%C3%8D_(hrad)"
+            },
+            {
+                id: 'rytro',
+                name: "Zamek w Rytrze (PL)",
+                category: ["pl", "pamiatky"],
+                coords: [49.489, 20.678],
+                icon: "fa-shield-halved",
+                desc: "Romantická zrúcanina stredovekého poľského hradu nad údolím Popradu.",
+                link: "https://pl.wikipedia.org/wiki/Zamek_w_Rytrze"
+            },
+            {
+                id: 'cerveny-klastor',
+                name: "Červený Kláštor & Prielom Dunajca",
+                category: ["pamiatky", "priroda"],
+                coords: [49.398, 20.415],
+                icon: "fa-ship",
+                desc: "Prielom Dunajca, tradičné plte, rafty a historický kartuziánsky kláštor v Pieninách.",
+                link: "https://sk.wikipedia.org/wiki/%C4%8Cerven%C3%BD_Kl%C3%A1%C5%A1tor_(obec)"
+            },
+            {
+                id: 'piwniczna',
+                name: "Piwniczna-Zdrój",
+                category: ["pl", "gastro"],
+                coords: [49.435, 20.712],
+                icon: "fa-mug-hot",
+                desc: "Kúpeľné mestečko na poľskej strane Popradu s parkom, pitným pavilónom a kaviarňami.",
+                link: "https://pl.wikipedia.org/wiki/Piwniczna-Zdr%C3%B3j"
+            },
+			{
+        id: 'udol-skaly',
+        name: "Vyhliadka Údolské skalky & Veža",
+        category: ["priroda"],
+        coords: [49.2855414, 20.8097792],
+        icon: "fa-eye",
+        desc: "Úchvatné vápencové bradlá pri obci Údol s novou drevenou vyhliadkovou vežou a kruhovým výhľadom na rieku Poprad.",
+        link: "https://www.legendarium.info/vylet/skalky-pri-obci-udol"
+    },
+    {
+        id: 'matysova-lietadlo',
+        name: "Marmon",
+        category: ["pamiatky", "priroda"],
+        coords: [49.318850, 20.732100],
+        icon: "fa-plane-slash",
+        desc: "Spomienkové miesto v hlbokých lesoch v sedle Marmon pri Matysovej, kde počas 2. svetovej vojny havarovalo vojenské lietadlo.",
+        link: "https://visitspis.sk/tip-na-vylet-sedlo-marmon/"
+    },
+    {
+        id: 'plavnica-zidovsky-cintorin',
+        name: "Židovský cintorín (Plavnica)",
+        category: ["pamiatky"],
+        coords: [49.272395, 20.768382],
+        icon: "fa-monument",
+        desc: "Historický židovský cintorín na úpätí kopec nad obecou Plavnica pripomínajúci pôvodnú židovskú komunitu v regióne.",
+        link: "https://maps.google.com/?cid=5773888738491987505"
+    },
+    {
+        id: 'plavnica-kostol-sedembolestnej',
+        name: "Kostol Sedembolestnej Panny Márie (Plavnica)",
+        category: ["pamiatky"],
+        coords: [49.275195, 20.780012],
+        icon: "fa-church",
+        desc: "Moderný farský kostol v Plavnici postavený a posvätený v roku 2006 s dominantnou architektúrou.",
+        link: "https://plavnica.fara.sk/"
+    },
+    {
+        id: 'plavnica-evanjelicky-zvonica',
+        name: "Evanjelický kostol a drevená zvonica (Plavnica)",
+        category: ["pamiatky"],
+        coords: [49.271950, 20.777560],
+        icon: "fa-bell",
+        desc: "Tolerančný evanjelický kostol a. v. s historickou drevenou zvonicou tvoriaci typickú panorámu dediny.",
+        link: "https://www.eurovelo11.sk/vylet/evanjelicky-a-v-kostol"
+    },
+    {
+        id: 'plavnica-kostol-obetovania-pana',
+        name: "Kostol Obetovania Pána (Plavnica)",
+        category: ["pamiatky"],
+        coords: [49.274313, 20.779969],
+        icon: "fa-place-of-worship",
+        desc: "Najstarší ranogotický kostol v Plavnici zo začiatku 14. storočia s cenným historickým stredovekým jadrom.",
+        link: "https://www.plavnica.sk/zivot-v-obci/cirkev"
+    },
+    {
+        id: 'plavnica-pizzeria',
+        name: "Pizzeria Martin Žoldák (Plavnica)",
+        category: ["gastro"],
+        coords: [49.276469, 20.783874],
+        icon: "fa-pizza-slice",
+        desc: "Obľúbená lokálna pizzeria priamo v Plavnici ponúkajúca pizzu, poctivé občerstvenie a posedenie.",
+        link: "https://www.plavnica.sk/portal-detail/15/"
+    },
+    {
+        id: 'plavnica-vanilla',
+        name: "Cukráreň VANILLA (Plavnica)",
+        category: ["gastro"],
+        coords: [49.274150, 20.778500],
+        icon: "fa-ice-cream",
+        desc: "Vyhlásená domáca cukráreň v Plavnici s vynikajúcimi zákuskami, tortami a osviežujúcou zmrzlinou.",
+        link: "https://www.plavnica.sk/zivot-v-obci/firmy-a-sluzby/restauracie"
+    },
+    {
+        id: 'plavnica-krizova-cesta',
+        name: "Krížová cesta (Plavnica)",
+        category: ["pamiatky", "priroda"],
+        coords: [49.274439, 20.777780],
+        icon: "fa-cross",
+        desc: "Pobožné a pokojné miesto Kalvárie s jednotlivými zastaveniami zasadenej do tichého prírodného prostredia nad obecou Plavnica.",
+        link: "https://www.plavnica.sk/zivot-v-obci/cirkev"
+    },
+	            {
+                id: 'restauracia-hranica',
+                name: "Reštaurácia Hranica (Mníšek nad Popradom)",
+                category: ["gastro"],
+                coords: [49.4158, 20.7165],
+                icon: "fa-utensils",
+                desc: "Tradičná lokálna reštaurácia a pohostinstvo pri hraničnom priechode Mníšek nad Popradom.",
+                link: "https://www.facebook.com/restauraciahranica/"
+            },
+        ];
+
+        // Bratislava to Medzibrodie Coordinates Route
+        const routeCoordinates = [
+            [48.148, 17.107], // Bratislava
+            [48.306, 17.291], // Trnava
+            [48.788, 17.886], // Nové Mesto nad Váhom
+            [48.894, 18.044], // Trenčín
+            [49.223, 18.739], // Žilina
+            [49.138, 19.299], // Ružomberok
+            [49.055, 19.600], // Liptovský Mikuláš
+            [49.054, 20.297], // Poprad
+            [49.200, 20.520], // Kežmarok
+            [49.301, 20.688], // Stará Ľubovňa
+            [49.3458, 20.6865], // Sedlo Vabec
+            [49.365, 20.702], // Hraničné
+            [49.413, 20.713]  // Medzibrodie
+        ];
+
+        // Initialize Map
+        const map = L.map('map', {
+            zoomControl: false,
+            attributionControl: false
+        }).setView([49.37, 20.70], 11);
+
+        // CartoDB Dark Matter Tiles - 100% FREE, NO API KEY REQUIRED
+        L.tileLayer('https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_4qtn_1_043106a6b630d0268cd166ce', {
+            maxZoom: 19,
+            subdomains: 'abcd'
+        }).addTo(map);
+
+        // Add Zoom Control
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        // Layers and State Storage
+        let markersLayer = L.layerGroup().addTo(map);
+        let routePolyline = null;
+        let isRouteVisible = false;
+
+        // Custom Marker HTML Builder
+        function createCustomIcon(location) {
+            const isBase = location.isBase;
+            const bgClass = isBase 
+                ? 'bg-amber-400 text-stone-950 border-2 border-white' 
+                : 'bg-rose-900 text-rose-100 border border-rose-500/70 shadow-lg';
+            const pulseClass = isBase ? 'base-pin-pulse' : '';
+            const size = isBase ? 'w-10 h-10 text-base' : 'w-8 h-8 text-xs';
+
+            const html = `
+                <div class="custom-marker ${bgClass} ${pulseClass} ${size} shadow-rose-950/90">
+                    <i class="fa-solid ${location.icon}"></i>
+                </div>
+            `;
+
+            return L.divIcon({
+                html: html,
+                className: '',
+                iconSize: isBase ? [40, 40] : [32, 32],
+                iconAnchor: isBase ? [20, 20] : [16, 16],
+                popupAnchor: [0, -20]
+            });
+        }
+
+        // Render Markers based on Category Filter
+        function renderMarkers(filter = 'all') {
+            markersLayer.clearLayers();
+            const listContainer = document.getElementById('locationsList');
+            listContainer.innerHTML = '';
+
+            let count = 0;
+
+            locations.forEach(loc => {
+                if (filter === 'all' || loc.category.includes(filter)) {
+                    count++;
+                    
+                    // Create Leaflet Marker
+                    const marker = L.marker(loc.coords, {
+                        icon: createCustomIcon(loc)
+                    });
+
+                    // Create Popup
+                    const popupHTML = `
+                        <div class="p-2 max-w-[240px]">
+                            <div class="flex items-center gap-2 mb-1.5">
+                                <span class="w-6 h-6 rounded-lg bg-rose-900 border border-rose-700 flex items-center justify-center text-amber-400 text-xs shrink-0">
+                                    <i class="fa-solid ${loc.icon}"></i>
+                                </span>
+                                <h4 class="font-bold text-sm text-rose-100 leading-tight">${loc.name}</h4>
+                            </div>
+                            <p class="text-xs text-rose-200/80 mb-3 leading-relaxed">${loc.desc}</p>
+                            <a href="${loc.link}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1.5 w-full bg-rose-900 hover:bg-rose-800 text-amber-300 font-semibold text-xs py-1.5 px-3 rounded-lg border border-rose-700/60 transition-all">
+                                <span>Otvoriť detail</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                            </a>
+                        </div>
+                    `;
+
+                    marker.bindPopup(popupHTML);
+                    markersLayer.addLayer(marker);
+
+                    // Add Item to Bottom Drawer List
+                    const itemHTML = `
+                        <div onclick="focusLocation(${loc.coords[0]}, ${loc.coords[1]}, '${loc.id}')" class="bg-rose-900/40 hover:bg-rose-900/80 border border-rose-800/40 rounded-xl p-2.5 flex items-start gap-3 cursor-pointer transition-all active:scale-[0.98]">
+                            <div class="w-8 h-8 rounded-lg bg-rose-900 border border-rose-700/60 flex items-center justify-center text-amber-400 shrink-0 mt-0.5">
+                                <i class="fa-solid ${loc.icon}"></i>
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <h5 class="font-semibold text-xs text-rose-100 truncate">${loc.name}</h5>
+                                <p class="text-[11px] text-rose-300/70 line-clamp-2 mt-0.5">${loc.desc}</p>
+                            </div>
+                        </div>
+                    `;
+                    listContainer.insertAdjacentHTML('beforeend', itemHTML);
+                }
+            });
+
+            document.getElementById('locationCount').innerText = count;
+        }
+
+        // Category Filter Switching
+        function filterCategory(cat) {
+            document.querySelectorAll('.cat-btn').forEach(btn => {
+                btn.classList.remove('bg-rose-800', 'text-white');
+                btn.classList.add('bg-rose-950/80', 'text-rose-200');
+            });
+
+            const activeBtn = document.getElementById(`btn-${cat}`);
+            if(activeBtn) {
+                activeBtn.classList.remove('bg-rose-950/80', 'text-rose-200');
+                activeBtn.classList.add('bg-rose-800', 'text-white');
+            }
+
+            renderMarkers(cat);
+        }
+
+        // Focus Location from Drawer List
+        function focusLocation(lat, lng, id) {
+            map.flyTo([lat, lng], 13, { duration: 1.2 });
+            toggleList();
+
+            markersLayer.eachLayer(layer => {
+                const latLng = layer.getLatLng();
+                if (Math.abs(latLng.lat - lat) < 0.0001 && Math.abs(latLng.lng - lng) < 0.0001) {
+                    setTimeout(() => layer.openPopup(), 1200);
+                }
+            });
+        }
+
+        // Toggle Bratislava Route
+        function toggleRoute() {
+            if (!isRouteVisible) {
+                routePolyline = L.polyline(routeCoordinates, {
+                    color: '#fbbf24',
+                    weight: 3.5,
+                    opacity: 0.9,
+                    dashArray: '8, 8',
+                    lineCap: 'round'
+                }).addTo(map);
+
+                map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
+
+                document.getElementById('routeBtnText').innerText = 'Skryť trasu BA';
+                document.getElementById('routeBtn').classList.add('ring-2', 'ring-amber-400');
+                isRouteVisible = true;
+            } else {
+                if (routePolyline) {
+                    map.removeLayer(routePolyline);
+                }
+                document.getElementById('routeBtnText').innerText = 'Trasa z Bratislavy';
+                document.getElementById('routeBtn').classList.remove('ring-2', 'ring-amber-400');
+                isRouteVisible = false;
+                resetView();
+            }
+        }
+
+        // Reset Camera to Medzibrodie
+        function resetView() {
+            map.flyTo([49.37, 20.70], 11, { duration: 1 });
+        }
+
+        // Toggle Drawer List
+        function toggleList() {
+            const drawer = document.getElementById('listDrawer');
+            drawer.classList.toggle('translate-y-full');
+        }
+
+        // Initial Load
+        window.onload = function() {
+            renderMarkers('all');
+        };
+    </script>
+</body>
+</html>
